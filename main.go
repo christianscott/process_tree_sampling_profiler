@@ -151,7 +151,7 @@ func sample(pattern string, samples map[string]int) {
 		if count, ok := samples[proc.command]; ok {
 			samples[proc.command] = count + 1
 		} else {
-			samples[proc.command] = 0
+			samples[proc.command] = 1
 		}
 	}
 }
