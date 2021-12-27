@@ -33,7 +33,8 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
-		for _ = range c {
+		select {
+		case <-c:
 			fmt.Fprintf(os.Stderr, "\n")
 			for command, count := range samples {
 				fmt.Printf("%4d %s\n", count, command)
