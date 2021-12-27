@@ -23,10 +23,9 @@ type proc struct {
 func main() {
 	pattern := flag.String("pattern", "", "Pattern to match commands against to find proc of interest")
 	samplingInterval := flag.Int("samplingInterval", 100, "Number of milliseconds to sleep between samples")
-	out := flag.String("out", "stdout", "Number of milliseconds to sleep between samples")
 	flag.Parse()
 
-	fmt.Fprintf(os.Stderr, "Sampling every %d ms. Hit Ctrl+C to write to %s", *samplingInterval, *out)
+	fmt.Fprintf(os.Stderr, "Sampling every %d ms. Hit Ctrl+C to write to stdout", *samplingInterval)
 
 	samples := make(map[string]int)
 
