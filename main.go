@@ -20,35 +20,35 @@ type proc struct {
 	children []int
 }
 
+type sample struct {
+	at    time.Time
+	procs map[int]proc
+}
+
 func main() {
 	pattern := flag.String("pattern", "", "Pattern to match commands against to find proc of interest")
 	samplingInterval := flag.Int("samplingInterval", 100, "Number of milliseconds to sleep between samples")
 	flag.Parse()
 
-	fmt.Fprintf(os.Stderr, "Sampling every %d ms. Hit Ctrl+C to write to stdout", *samplingInterval)
-
-	samples := make(map[string]int)
+	fmt.Fprintf(os.Stderr, "Sampling every %d ms. Hit Ctrl+C to write to stop\n", *samplingInterval)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		select {
 		case <-c:
-			fmt.Fprintf(os.Stderr, "\n")
-			for command, count := range samples {
-				fmt.Printf("%4d %s\n", count, command)
-			}
 			os.Exit(0)
 		}
 	}()
 
+	var lastSample *sample
 	for {
-		sample(*pattern, samples)
+		doSample(*pattern, lastSample)
 		time.Sleep(time.Duration(*samplingInterval) * time.Millisecond)
 	}
 }
 
-func sample(pattern string, samples map[string]int) {
+func doSample(pattern string, lastSample *sample) {
 	cols := []string{"user", "pid", "ppid", "pgid", "command"}
 	args := []string{"ps", "-axwwo", strings.Join(cols, ",")}
 	psCmd := exec.Command(args[0], args[1:]...)
@@ -148,11 +148,11 @@ func sample(pattern string, samples map[string]int) {
 		// append the new PIDs so they're visited first
 		pidsToVisit = append(newPidsToVisit, pidsToVisit...)
 
-		if count, ok := samples[proc.command]; ok {
-			samples[proc.command] = count + 1
-		} else {
-			samples[proc.command] = 1
-		}
+		//if count, ok := samples[proc.command]; ok {
+		//	samples[proc.command] = count + 1
+		//} else {
+		//	samples[proc.command] = 1
+		//}
 	}
 }
 
