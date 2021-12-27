@@ -41,14 +41,14 @@ func main() {
 		}
 	}()
 
-	var lastSample *sample
+	var lastSample sample
 	for {
-		doSample(*pattern, lastSample)
+		lastSample = doSample(*pattern, lastSample)
 		time.Sleep(time.Duration(*samplingInterval) * time.Millisecond)
 	}
 }
 
-func doSample(pattern string, lastSample *sample) {
+func doSample(pattern string, lastSample sample) sample {
 	cols := []string{"user", "pid", "ppid", "pgid", "command"}
 	args := []string{"ps", "-axwwo", strings.Join(cols, ",")}
 	psCmd := exec.Command(args[0], args[1:]...)
@@ -107,6 +107,12 @@ func doSample(pattern string, lastSample *sample) {
 			pgid:    strictAtoi(parsedCols[3]),
 			command: parsedCols[4],
 		}
+
+		if proc.pid == psCmd.Process.Pid {
+			// not interested in the `ps ...` command that we started
+			continue
+		}
+
 		procs[proc.pid] = proc
 		pids = append(pids, proc.pid)
 
@@ -130,16 +136,15 @@ func doSample(pattern string, lastSample *sample) {
 		pidsToVisit = append(pidsToVisit, pidToVisit{pid: pid, depth: 0})
 	}
 
-	visited := make(map[int]bool)
+	sample := sample{at: time.Now(), procs: make(map[int]proc)}
 	for len(pidsToVisit) > 0 {
 		pid := pidsToVisit[0]
 		pidsToVisit = pidsToVisit[1:]
-		if _, ok := visited[pid.pid]; ok {
+		if _, ok := sample.procs[pid.pid]; ok {
 			continue
 		}
-		visited[pid.pid] = true
-
 		proc := procs[pid.pid]
+		sample.procs[pid.pid] = proc
 
 		newPidsToVisit := make([]pidToVisit, len(proc.children))
 		for i := 0; i < len(proc.children); i += 1 {
@@ -148,12 +153,18 @@ func doSample(pattern string, lastSample *sample) {
 		// append the new PIDs so they're visited first
 		pidsToVisit = append(newPidsToVisit, pidsToVisit...)
 
-		//if count, ok := samples[proc.command]; ok {
-		//	samples[proc.command] = count + 1
-		//} else {
-		//	samples[proc.command] = 1
-		//}
+		if _, ok := lastSample.procs[pid.pid]; !ok {
+			fmt.Printf("STARTED: %d %s\n", pid.pid, proc.command)
+		}
 	}
+
+	for pid, proc := range lastSample.procs {
+		if _, ok := sample.procs[pid]; !ok {
+			fmt.Printf("ENDED: %d %s\n", pid, proc.command)
+		}
+	}
+
+	return sample
 }
 
 func strictAtoi(s string) int {
