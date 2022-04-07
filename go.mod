@@ -1,3 +1,3 @@
-module github.com/christianscott/process_tree_sampling_profiler
+module github.com/christianscott/pstree_prof
 
 go 1.16

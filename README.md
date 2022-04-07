@@ -1,4 +1,4 @@
-# process_tree_sampling_profiler
+# pstree_prof
 
 Start a process & sample the tree of child processes it spawns
 
