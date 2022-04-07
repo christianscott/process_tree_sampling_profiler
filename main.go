@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -30,7 +31,7 @@ func main() {
 	samplingInterval := flag.Int("samplingInterval", 100, "Number of milliseconds to sleep between samples")
 	flag.Parse()
 
-	fmt.Fprintf(os.Stderr, "pstree_prof: Sampling every %d ms. Hit Ctrl+C to write to stop\n", *samplingInterval)
+	fmt.Fprintf(os.Stderr, "pstree_prof: sampling every %d ms\n", *samplingInterval)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -52,15 +53,53 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	samples := make([]sample, 1)
 	go func() {
 		cmd.Wait()
+		summarizeSamples(samples)
 		os.Exit(0)
 	}()
 
 	var lastSample sample
 	for {
-		lastSample = doSample("", lastSample)
+		lastSample = doSample(cmd.Process.Pid, lastSample)
+		samples = append(samples, lastSample)
 		time.Sleep(time.Duration(*samplingInterval) * time.Millisecond)
+	}
+}
+
+func summarizeSamples(samples []sample) {
+	counts := make(map[string]int)
+	for _, sample := range samples {
+		for _, proc := range sample.procs {
+			if count, ok := counts[proc.command]; ok {
+				counts[proc.command] = count + 1
+			} else {
+				counts[proc.command] = 1
+			}
+		}
+	}
+
+	type countAndCommand struct {
+		count   int
+		command string
+	}
+	countsAndCommands := make([]countAndCommand, len(counts))
+	for command, count := range counts {
+		countsAndCommands = append(countsAndCommands, countAndCommand{count, command})
+	}
+
+	sort.SliceStable(countsAndCommands, func(i, j int) bool {
+		return countsAndCommands[i].count > countsAndCommands[j].count
+	})
+
+	fmt.Println("count\tcommand")
+	for _, cAndC := range countsAndCommands {
+		if cAndC.count == 0 {
+			continue
+		}
+		fmt.Printf("%d\t%s\n", cAndC.count, cAndC.command)
 	}
 }
 
@@ -75,7 +114,7 @@ func startCommandInBackground(name string, args ...string) (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-func doSample(pattern string, lastSample sample) sample {
+func doSample(pid int, lastSample sample) sample {
 	cols := []string{"user", "pid", "ppid", "pgid", "command"}
 	args := []string{"ps", "-axwwo", strings.Join(cols, ",")}
 	psCmd := exec.Command(args[0], args[1:]...)
@@ -143,7 +182,7 @@ func doSample(pattern string, lastSample sample) sample {
 		procs[proc.pid] = proc
 		pids = append(pids, proc.pid)
 
-		if strings.Contains(proc.command, pattern) {
+		if proc.pid == pid {
 			pidsOfInterest = append(pidsOfInterest, proc.pid)
 		}
 	}
@@ -179,16 +218,6 @@ func doSample(pattern string, lastSample sample) sample {
 		}
 		// append the new PIDs so they're visited first
 		pidsToVisit = append(newPidsToVisit, pidsToVisit...)
-
-		if _, ok := lastSample.procs[pid.pid]; !ok {
-			fmt.Printf("STARTED: %d %s\n", pid.pid, proc.command)
-		}
-	}
-
-	for pid, proc := range lastSample.procs {
-		if _, ok := sample.procs[pid]; !ok {
-			fmt.Printf("ENDED: %d %s\n", pid, proc.command)
-		}
 	}
 
 	return sample
