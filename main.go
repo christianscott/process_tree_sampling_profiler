@@ -26,11 +26,11 @@ type sample struct {
 }
 
 func main() {
-	pattern := flag.String("pattern", "", "Pattern to match commands against to find proc of interest")
+	command := flag.String("command", "", "Command to run")
 	samplingInterval := flag.Int("samplingInterval", 100, "Number of milliseconds to sleep between samples")
 	flag.Parse()
 
-	fmt.Fprintf(os.Stderr, "Sampling every %d ms. Hit Ctrl+C to write to stop\n", *samplingInterval)
+	fmt.Fprintf(os.Stderr, "pstree_prof: Sampling every %d ms. Hit Ctrl+C to write to stop\n", *samplingInterval)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -41,11 +41,38 @@ func main() {
 		}
 	}()
 
+	if *command == "" {
+		fmt.Fprintln(os.Stderr, "pstree_prof: A command must be specified")
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	commandParts := strings.Split(*command, " ")
+	cmd, err := startCommandInBackground(commandParts[0], commandParts[1:]...)
+	if err != nil {
+		panic(err)
+	}
+	go func() {
+		cmd.Wait()
+		os.Exit(0)
+	}()
+
 	var lastSample sample
 	for {
-		lastSample = doSample(*pattern, lastSample)
+		lastSample = doSample("", lastSample)
 		time.Sleep(time.Duration(*samplingInterval) * time.Millisecond)
 	}
+}
+
+func startCommandInBackground(name string, args ...string) (*exec.Cmd, error) {
+	cmd := exec.Command(name, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Start()
+	if err != nil {
+		return nil, fmt.Errorf("failed to start command: %s", err)
+	}
+	return cmd, nil
 }
 
 func doSample(pattern string, lastSample sample) sample {
@@ -59,7 +86,7 @@ func doSample(pattern string, lastSample sample) sample {
 
 	lines := strings.Split(string(psOut), "\n")
 	if len(lines) == 0 {
-		panic("expected at least one line of output")
+		panic("pstree_prof: expected at least one line of output")
 	}
 	// skip header
 	lines = lines[1:]
