@@ -209,17 +209,22 @@ func printProcCounts(samples []sample) {
 }
 
 func printProcStartsAndEnds(samples []sample) {
+	fmt.Fprintf(os.Stderr, "event\tpid\tts\tcmd\n")
+	row := func(event string, pid int, ts time.Time, cmd string) {
+		fmt.Fprintf(os.Stderr, "%s\t%d\t%s\t%s\n", event, pid, ts, cmd)
+	}
+
 	for i, sample := range samples {
 		if i > 0 {
 			for _, proc := range samples[i-1].Procs {
 				if procEndedThisSample(proc, i, samples) {
-					fmt.Fprintf(os.Stderr, "ENDED:   %d at %s (%s)\n", proc.Pid, sample.At.Format(time.RFC3339), proc.Command)
+					row("ended", proc.Pid, sample.At, proc.Command)
 				}
 			}
 		}
 		for _, proc := range sample.Procs {
 			if procStartedThisSample(proc, i, samples) {
-				fmt.Fprintf(os.Stderr, "STARTED: %d at %s (%s)\n", proc.Pid, sample.At.Format(time.RFC3339), proc.Command)
+				row("started", proc.Pid, sample.At, proc.Command)
 			}
 		}
 	}
