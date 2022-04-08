@@ -209,41 +209,28 @@ func printProcCounts(samples []sample) {
 }
 
 func printProcStartsAndEnds(samples []sample) {
-	fmt.Fprintf(os.Stderr, "event\tpid\tts\tcmd\n")
-	row := func(event string, pid int, ts time.Time, cmd string) {
-		fmt.Fprintf(os.Stderr, "%s\t%d\t%s\t%s\n", event, pid, ts, cmd)
+	fmt.Fprintf(os.Stderr, "event\tpid\tsample\tcmd\n")
+	row := func(event string, pid int, nthSample int, cmd string) {
+		fmt.Fprintf(os.Stderr, "%s\t%d\t%d\t%s\n", event, pid, nthSample, cmd)
 	}
 
+	procs := make(map[int]proc)
 	for i, sample := range samples {
-		if i > 0 {
-			for _, proc := range samples[i-1].Procs {
-				if procEndedThisSample(proc, i, samples) {
-					row("ended", proc.Pid, sample.At, proc.Command)
-				}
+		for _, p := range sample.Procs {
+			_, seenBefore := procs[p.Pid]
+			if !seenBefore {
+				row("started", p.Pid, i, p.Command)
+				procs[p.Pid] = p
 			}
 		}
-		for _, proc := range sample.Procs {
-			if procStartedThisSample(proc, i, samples) {
-				row("started", proc.Pid, sample.At, proc.Command)
+		for _, p := range procs {
+			_, procStillRunning := sample.Procs[p.Pid]
+			if !procStillRunning || i == len(samples)-1 {
+				row("ended", p.Pid, i, p.Command)
+				delete(procs, p.Pid)
 			}
 		}
 	}
-}
-
-func procStartedThisSample(p proc, i int, samples []sample) bool {
-	if i == 0 {
-		return true
-	}
-	_, existsInPrevSample := samples[i-1].Procs[p.Pid]
-	return !existsInPrevSample
-}
-
-func procEndedThisSample(p proc, i int, samples []sample) bool {
-	if i == len(samples)-1 {
-		return true
-	}
-	_, existsInSample := samples[i].Procs[p.Pid]
-	return !existsInSample
 }
 
 func startCommandInBackground(name string, args []string, afterCommand func()) (*exec.Cmd, error) {
