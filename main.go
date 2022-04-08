@@ -27,9 +27,9 @@ type sample struct {
 }
 
 func main() {
-	command := flag.String("command", "", "Command to run")
-	outputMode := flag.String("outputMode", "count", "Method used to summarize the samples")
-	samplingInterval := flag.Int("samplingInterval", 100, "Number of milliseconds to sleep between samples")
+	command := flag.String("cmd", "", "Command to run")
+	outputFmt := flag.String("fmt", "count", "Output format to summarize samples")
+	freq := flag.Int("freq", 100, "Sampling frequency in Hertz")
 	flag.Parse()
 
 	if *command == "" {
@@ -38,17 +38,20 @@ func main() {
 	}
 
 	log.SetPrefix("pstree_prof: ")
-	log.Printf("sampling every %dms\n", *samplingInterval)
+
+	delay := 1000 / *freq
+	log.Printf("sampling every %dms\n", delay)
+	delayMS := time.Duration(delay) * time.Millisecond
 
 	samples := make([]sample, 1)
 	commandParts := strings.Split(*command, " ")
 	cmd, err := startCommandInBackground(commandParts[0], commandParts[1:], func() {
-		switch *outputMode {
+		switch *outputFmt {
 		case "count":
 			countCommandOccurrences(samples)
 		case "json":
 		default:
-			log.Fatalf("unrecognized outputMode: %s\n", *outputMode)
+			log.Fatalf("unrecognized outputMode: %s\n", *outputFmt)
 		}
 		os.Exit(0) // why do I need to do this?
 	})
@@ -60,7 +63,7 @@ func main() {
 	for {
 		lastSample = sampleProcs(cmd.Process.Pid, lastSample)
 		samples = append(samples, lastSample)
-		time.Sleep(time.Duration(*samplingInterval) * time.Millisecond)
+		time.Sleep(delayMS)
 	}
 }
 

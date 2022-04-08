@@ -11,8 +11,8 @@ $ cat eg/test.sh
 node -e 'setTimeout(() => {}, 1000)'
 python3 -c 'import time; time.sleep(2)'
 sleep 3                                                                                                                                                                                                                                                                                                                                                         
-$ ./pstree_prof -command 'bash eg/test.sh' -samplingInterval 100
-pstree_prof: 2022/04/08 11:48:00 sampling every 100ms
+$ ./pstree_prof -cmd 'bash eg/test.sh' -freq 100 -fmt count
+pstree_prof: 2022/04/08 11:48:00 sampling every 10ms
 pstree_prof: 2022/04/08 11:48:00 start of output from command:
 pstree_prof: 2022/04/08 11:48:07 end of output from command
 count   command
