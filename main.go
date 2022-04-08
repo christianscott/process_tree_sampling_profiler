@@ -48,8 +48,9 @@ func main() {
 	cmd, err := startCommandInBackground(commandParts[0], commandParts[1:], func() {
 		switch *outputFmt {
 		case "count":
-			countCommandOccurrences(samples)
-		case "json":
+			printProcCounts(samples)
+		case "starts_and_ends":
+			printProcStartsAndEnds(samples)
 		default:
 			log.Fatalf("unrecognized outputMode: %s\n", *outputFmt)
 		}
@@ -173,25 +174,25 @@ func parseLineAsProc(line string, cols []string) proc {
 	}
 }
 
-func countCommandOccurrences(samples []sample) {
-	counts := make(map[string]int)
+func printProcCounts(samples []sample) {
+	type countAndCommand struct {
+		count int
+		cmd   string
+	}
+	counts := make(map[int]countAndCommand)
 	for _, sample := range samples {
 		for _, proc := range sample.Procs {
-			if count, ok := counts[proc.Command]; ok {
-				counts[proc.Command] = count + 1
+			if cc, ok := counts[proc.Pid]; ok {
+				counts[proc.Pid] = countAndCommand{count: cc.count + 1, cmd: cc.cmd}
 			} else {
-				counts[proc.Command] = 1
+				counts[proc.Pid] = countAndCommand{count: 1, cmd: proc.Command}
 			}
 		}
 	}
 
-	type countAndCommand struct {
-		count   int
-		command string
-	}
 	countsAndCommands := make([]countAndCommand, len(counts))
-	for command, count := range counts {
-		countsAndCommands = append(countsAndCommands, countAndCommand{count, command})
+	for _, count := range counts {
+		countsAndCommands = append(countsAndCommands, count)
 	}
 
 	sort.SliceStable(countsAndCommands, func(i, j int) bool {
@@ -203,8 +204,41 @@ func countCommandOccurrences(samples []sample) {
 		if cAndC.count == 0 {
 			continue
 		}
-		fmt.Printf("%d\t%s\n", cAndC.count, cAndC.command)
+		fmt.Printf("%d\t%s\n", cAndC.count, cAndC.cmd)
 	}
+}
+
+func printProcStartsAndEnds(samples []sample) {
+	for i, sample := range samples {
+		if i > 0 {
+			for _, proc := range samples[i-1].Procs {
+				if procEndedThisSample(proc, i, samples) {
+					fmt.Fprintf(os.Stderr, "ENDED:   %d at %s (%s)\n", proc.Pid, sample.At.Format(time.RFC3339), proc.Command)
+				}
+			}
+		}
+		for _, proc := range sample.Procs {
+			if procStartedThisSample(proc, i, samples) {
+				fmt.Fprintf(os.Stderr, "STARTED: %d at %s (%s)\n", proc.Pid, sample.At.Format(time.RFC3339), proc.Command)
+			}
+		}
+	}
+}
+
+func procStartedThisSample(p proc, i int, samples []sample) bool {
+	if i == 0 {
+		return true
+	}
+	_, existsInPrevSample := samples[i-1].Procs[p.Pid]
+	return !existsInPrevSample
+}
+
+func procEndedThisSample(p proc, i int, samples []sample) bool {
+	if i == len(samples)-1 {
+		return true
+	}
+	_, existsInSample := samples[i].Procs[p.Pid]
+	return !existsInSample
 }
 
 func startCommandInBackground(name string, args []string, afterCommand func()) (*exec.Cmd, error) {
