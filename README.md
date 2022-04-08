@@ -28,3 +28,4 @@ count   command
 - [x] add `-command` flag
 - [ ] export traces using otel
 - [ ] export traces to a flamegraph-compatible format (stack samples?)
+- [ ] use `libproc.h` instead of `ps`
