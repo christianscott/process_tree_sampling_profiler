@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const NAME = "pstree_prof"
+
 type proc struct {
 	User     string `json:"user"`
 	Pid      int    `json:"pid"`
@@ -37,7 +39,7 @@ func main() {
 		log.Fatalln("a non-empty command must be specified")
 	}
 
-	log.SetPrefix("pstree_prof: ")
+	log.SetPrefix(fmt.Sprintf("%s: ", NAME))
 
 	delay := 1000 / *freq
 	log.Printf("sampling every %dms\n", delay)
@@ -51,6 +53,8 @@ func main() {
 			printProcCounts(samples)
 		case "starts_and_ends":
 			printProcStartsAndEnds(samples)
+		case "trace":
+			exportSamplesAsTraces(samples)
 		default:
 			log.Fatalf("unrecognized outputMode: %s\n", *outputFmt)
 		}
