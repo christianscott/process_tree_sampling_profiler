@@ -7,33 +7,20 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
-	"go.opentelemetry.io/otel/sdk/resource"
-	"go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
+	traceSDK "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func exportSamplesAsTraces(samples []sample) {
 	exporter, _ := stdouttrace.New(
 		stdouttrace.WithWriter(os.Stderr),
 		stdouttrace.WithPrettyPrint(),
-		// stdouttrace.WithoutTimestamps(),
+		stdouttrace.WithoutTimestamps(),
 	)
 
-	resource, _ := resource.Merge(
-		resource.Default(),
-		resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceNameKey.String("fib"),
-			semconv.ServiceVersionKey.String("v0.1.0"),
-			attribute.String("environment", "demo"),
-		),
-	)
-
-	tp := trace.NewTracerProvider(
-		trace.WithBatcher(exporter),
-		trace.WithResource(resource),
+	tp := traceSDK.NewTracerProvider(
+		traceSDK.WithBatcher(exporter),
 	)
 	defer func() {
 		if err := tp.Shutdown(context.Background()); err != nil {
@@ -65,13 +52,8 @@ func exportSamplesAsTraces(samples []sample) {
 			_, procStillRunning := sample.Procs[p.p.Pid]
 			if !procStillRunning || i == len(samples)-1 {
 				// proc ended, send span
-				_, span := tracer.Start(ctx, p.p.Command)
-				defer span.End()
-
-				// does not actually overwrite the start and end time :(
-				span.SetAttributes(attribute.Int64("StartTime", 0))
-				span.SetAttributes(attribute.Int64("end", sample.At.Unix()))
-
+				_, span := tracer.Start(ctx, p.p.Command, trace.WithTimestamp(p.startedAt))
+				span.End(trace.WithTimestamp(sample.At))
 				delete(procs, p.p.Pid)
 			}
 		}
