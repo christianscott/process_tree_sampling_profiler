@@ -2,6 +2,12 @@
 
 Start a process & sample the tree of child processes it spawns
 
+## installation
+
+```shell
+$ go get github.com/christianscott/pstree_prof
+```
+
 ## example
 
 ```sh
